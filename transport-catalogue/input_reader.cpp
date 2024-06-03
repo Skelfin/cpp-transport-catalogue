@@ -1,6 +1,5 @@
 #include "input_reader.h"
 #include <algorithm>
-#include <cassert>
 #include <iterator>
 
 namespace transport_catalogue {
@@ -92,14 +91,17 @@ namespace transport_catalogue {
     void InputReader::ApplyCommands(TransportCatalogue& catalogue) const {
         for (const auto& command : commands_) {
             if (command.command == "Stop") {
-                auto coordinates = ParseCoordinates(command.description);
-                catalogue.AddStop(command.id, coordinates);
+                Stop stop{ command.id, ParseCoordinates(command.description) };
+                catalogue.AddStop(stop);
             }
-            else if (command.command == "Bus") {
+        }
+
+        for (const auto& command : commands_) {
+            if (command.command == "Bus") {
+                Bus bus{ command.id, {}, command.description.find('>') != std::string::npos };
                 auto stops = ParseRoute(command.description);
-                std::vector<std::string> stops_vector(stops.begin(), stops.end());
-                bool is_circular = command.description.find('>') != std::string::npos;
-                catalogue.AddBus(command.id, stops_vector, is_circular);
+                bus.stops.assign(stops.begin(), stops.end());
+                catalogue.AddBus(bus);
             }
         }
     }

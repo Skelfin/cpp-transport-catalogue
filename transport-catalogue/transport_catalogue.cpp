@@ -6,14 +6,18 @@
 
 namespace transport_catalogue {
 
-    void TransportCatalogue::AddStop(const std::string& name, Coordinates coordinates) {
-        stops_[name] = { name, coordinates };
+    void TransportCatalogue::AddStop(const Stop& stop) {
+        stops_[stop.name] = stop;
+        stop_names_.push_back(stop.name); // Сохранение строк
     }
 
-    void TransportCatalogue::AddBus(const std::string& name, const std::vector<std::string>& stops, bool is_circular) {
-        buses_[name] = { name, stops, is_circular };
-        for (const auto& stop : stops) {
-            buses_by_stop_[stop].insert(name);
+    void TransportCatalogue::AddBus(const Bus& bus) {
+        buses_[bus.name] = bus;
+        for (const auto& stop : bus.stops) {
+            auto stop_it = std::find(stop_names_.begin(), stop_names_.end(), stop);
+            if (stop_it != stop_names_.end()) {
+                buses_by_stop_[*stop_it].insert(bus.name);
+            }
         }
     }
 
@@ -56,6 +60,22 @@ namespace transport_catalogue {
         std::vector<std::string> buses(buses_it->second.begin(), buses_it->second.end());
         std::sort(buses.begin(), buses.end());
         return buses;
+    }
+
+    const Stop* TransportCatalogue::FindStop(const std::string& name) const {
+        auto it = stops_.find(name);
+        if (it == stops_.end()) {
+            return nullptr;
+        }
+        return &it->second;
+    }
+
+    const Bus* TransportCatalogue::FindBus(const std::string& name) const {
+        auto it = buses_.find(name);
+        if (it == buses_.end()) {
+            return nullptr;
+        }
+        return &it->second;
     }
 
 }

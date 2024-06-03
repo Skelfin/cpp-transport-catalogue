@@ -4,9 +4,12 @@
 
 namespace transport_catalogue {
 
+    constexpr std::string_view BUS_COMMAND = "Bus";
+    constexpr std::string_view STOP_COMMAND = "Stop";
+
     void ParseAndPrintStat(const TransportCatalogue& transport_catalogue, std::string_view request, std::ostream& output) {
-        if (request.find("Bus") != std::string::npos) {
-            std::string bus_name = std::string(request.substr(4));
+        if (request.find(BUS_COMMAND) != std::string::npos) {
+            std::string bus_name = std::string(request.substr(BUS_COMMAND.size() + 1));
             try {
                 auto [stop_count, unique_stop_count, route_length] = transport_catalogue.GetBusInfo(bus_name);
                 output << "Bus " << bus_name << ": " << stop_count << " stops on route, "
@@ -16,8 +19,8 @@ namespace transport_catalogue {
                 output << "Bus " << bus_name << ": not found\n";
             }
         }
-        else if (request.find("Stop") != std::string::npos) {
-            std::string stop_name = std::string(request.substr(5));
+        else if (request.find(STOP_COMMAND) != std::string::npos) {
+            std::string stop_name = std::string(request.substr(STOP_COMMAND.size() + 1));
             try {
                 auto buses = transport_catalogue.GetBusesByStop(stop_name);
                 if (buses.empty()) {
