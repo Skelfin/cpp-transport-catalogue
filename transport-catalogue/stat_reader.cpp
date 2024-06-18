@@ -11,9 +11,10 @@ namespace transport_catalogue {
         if (request.find(BUS_COMMAND) != std::string::npos) {
             std::string bus_name = std::string(request.substr(BUS_COMMAND.size() + 1));
             try {
-                auto [stop_count, unique_stop_count, route_length] = transport_catalogue.GetBusInfo(bus_name);
+                auto [stop_count, unique_stop_count, route_length, curvature] = transport_catalogue.GetBusInfo(bus_name);
                 output << "Bus " << bus_name << ": " << stop_count << " stops on route, "
-                    << unique_stop_count << " unique stops, " << route_length << " route length\n";
+                    << unique_stop_count << " unique stops, " << route_length << " route length, "
+                    << std::setprecision(6) << curvature << " curvature\n";
             }
             catch (const std::out_of_range&) {
                 output << "Bus " << bus_name << ": not found\n";
