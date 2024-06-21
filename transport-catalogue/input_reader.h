@@ -31,4 +31,7 @@ namespace transport_catalogue {
         std::vector<CommandDescription> commands_;
     };
 
+    void ProcessStopCommand(const CommandDescription& command, TransportCatalogue& catalogue,
+        std::vector<std::tuple<std::string, std::string, int>>& distances);
+    void ProcessBusCommand(const CommandDescription& command, TransportCatalogue& catalogue);
 }

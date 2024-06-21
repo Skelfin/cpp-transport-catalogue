@@ -105,36 +105,48 @@ namespace transport_catalogue {
         }
     }
 
+    void ProcessStopCommand(const CommandDescription& command, TransportCatalogue& catalogue, std::vector<std::tuple<std::string, std::string, int>>& distances) {
+        auto coords_end = command.description.find("m to ");
+        std::string coords_str;
+
+        if (coords_end == std::string::npos) {
+            coords_str = command.description;
+        }
+        else {
+            coords_str = command.description.substr(0, command.description.rfind(',', coords_end));
+        }
+
+        coords_str = Trim(coords_str);
+
+        Stop stop{ command.id, ParseCoordinates(coords_str) };
+        catalogue.AddStop(stop);
+
+        if (coords_end != std::string::npos) {
+            std::regex regex(R"((\d+)m to ([^,]+))");
+            std::smatch match;
+            std::string rest = command.description.substr(command.description.rfind(',', coords_end) + 1);
+
+            while (std::regex_search(rest, match, regex)) {
+                distances.emplace_back(command.id, match[2].str(), std::stoi(match[1]));
+                rest = match.suffix().str();
+            }
+        }
+    }
+
+    void ProcessBusCommand(const CommandDescription& command, TransportCatalogue& catalogue) {
+        Bus bus{ command.id, {}, command.description.find('>') != std::string::npos };
+        auto stops = ParseRoute(command.description);
+        bus.stops.assign(stops.begin(), stops.end());
+        catalogue.AddBus(bus);
+    }
+
     void InputReader::ApplyCommands(TransportCatalogue& catalogue) const {
         std::vector<std::tuple<std::string, std::string, int>> distances;
+        distances.reserve(commands_.size() * 2);
 
         for (const auto& command : commands_) {
             if (command.command == "Stop") {
-                auto coords_end = command.description.find("m to ");
-                std::string coords_str;
-
-                if (coords_end == std::string::npos) {
-                    coords_str = command.description;
-                }
-                else {
-                    coords_str = command.description.substr(0, command.description.rfind(',', coords_end));
-                }
-
-                coords_str = Trim(coords_str);
-
-                Stop stop{ command.id, ParseCoordinates(coords_str) };
-                catalogue.AddStop(stop);
-
-                if (coords_end != std::string::npos) {
-                    std::regex regex(R"((\d+)m to ([^,]+))");
-                    std::smatch match;
-                    std::string rest = command.description.substr(command.description.rfind(',', coords_end) + 1);
-
-                    while (std::regex_search(rest, match, regex)) {
-                        distances.emplace_back(command.id, match[2].str(), std::stoi(match[1]));
-                        rest = match.suffix().str();
-                    }
-                }
+                ProcessStopCommand(command, catalogue, distances);
             }
         }
 
@@ -144,10 +156,7 @@ namespace transport_catalogue {
 
         for (const auto& command : commands_) {
             if (command.command == "Bus") {
-                Bus bus{ command.id, {}, command.description.find('>') != std::string::npos };
-                auto stops = ParseRoute(command.description);
-                bus.stops.assign(stops.begin(), stops.end());
-                catalogue.AddBus(bus);
+                ProcessBusCommand(command, catalogue);
             }
         }
     }

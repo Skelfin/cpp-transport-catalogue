@@ -7,66 +7,73 @@
 namespace transport_catalogue {
 
     void TransportCatalogue::AddStop(const Stop& stop) {
-        stops_[stop.name] = stop;
+        stops_.emplace(stop.name, stop);
         stop_names_.push_back(stop.name);
+        stop_strings_.push_back(stop.name);
     }
 
     void TransportCatalogue::AddBus(const Bus& bus) {
-        buses_[bus.name] = bus;
-        for (const auto& stop : bus.stops) {
-            auto stop_it = std::find(stop_names_.begin(), stop_names_.end(), stop);
-            if (stop_it != stop_names_.end()) {
-                buses_by_stop_[*stop_it].insert(bus.name);
-            }
+        auto& added_bus = buses_.emplace(bus.name, Bus{ bus.name, {}, bus.is_circular }).first->second;
+
+        for (const auto& stop_name : bus.stops) {
+            const auto& stop_ref = stops_.at(std::string(stop_name));
+            added_bus.stops.push_back(stop_ref.name);
+            buses_by_stop_[stop_ref.name].insert(added_bus.name);
         }
     }
 
-    void TransportCatalogue::SetDistance(const std::string& from, const std::string& to, int distance) {
+
+    void TransportCatalogue::SetDistance(const std::string_view& from, const std::string_view& to, int distance) {
         const Stop* from_stop = FindStop(from);
         const Stop* to_stop = FindStop(to);
         if (from_stop && to_stop) {
-            distances_[{from_stop, to_stop}] = distance;
+            distances_.emplace(std::make_pair(from_stop, to_stop), distance);
         }
     }
 
-    const std::vector<std::string>& TransportCatalogue::GetBusStops(const std::string& bus_name) const {
-        auto bus_it = buses_.find(bus_name);
-        if (bus_it == buses_.end()) {
-            throw std::out_of_range("Bus not found");
+    const std::vector<std::string_view>& TransportCatalogue::GetBusStops(const std::string_view& bus_name) const {
+        auto bus_it = buses_.find(std::string(bus_name));
+        if (bus_it != buses_.end()) {
+            return bus_it->second.stops;
         }
-        return bus_it->second.stops;
+        else {
+            static const std::vector<std::string_view> empty_result;
+            return empty_result;
+        }
     }
 
-    std::tuple<int, int, double, double> TransportCatalogue::GetBusInfo(const std::string& bus_name) const {
-        auto bus_it = buses_.find(bus_name);
+    BusInfo TransportCatalogue::GetBusInfo(const std::string_view& bus_name) const {
+        auto bus_it = buses_.find(std::string(bus_name));
         if (bus_it == buses_.end()) {
             throw std::out_of_range("Bus not found");
         }
 
         const auto& bus = bus_it->second;
-        std::unordered_set<std::string> unique_stops(bus.stops.begin(), bus.stops.end());
+        std::unordered_set<std::string_view> unique_stops(bus.stops.begin(), bus.stops.end());
         double total_length = 0;
         double geo_length = 0;
 
         for (size_t i = 0; i + 1 < bus.stops.size(); ++i) {
-            const auto& from = stops_.at(bus.stops[i]);
-            const auto& to = stops_.at(bus.stops[i + 1]);
-            try {
-                total_length += GetDistance(bus.stops[i], bus.stops[i + 1]);
-            }
-            catch (const std::out_of_range&) {
-                // Handle the case where distance isn't found
-            }
+            const auto& from = stops_.at(std::string(bus.stops[i]));
+            const auto& to = stops_.at(std::string(bus.stops[i + 1]));
+            total_length += GetDistance(bus.stops[i], bus.stops[i + 1]);
             geo_length += ComputeDistance(from.coordinates, to.coordinates);
         }
 
         double curvature = geo_length > 0 ? total_length / geo_length : 0;
 
-        return { static_cast<int>(bus.stops.size()), static_cast<int>(unique_stops.size()), total_length, curvature };
+        BusInfo bus_info;
+        bus_info.name = bus.name;
+        bus_info.count_stops = bus.stops.size();
+        bus_info.unique_count_stops = unique_stops.size();
+        bus_info.len = total_length;
+        bus_info.curvature = curvature;
+
+        return bus_info;
     }
 
-    std::vector<std::string> TransportCatalogue::GetBusesByStop(const std::string& stop_name) const {
-        auto stop_it = stops_.find(stop_name);
+    std::vector<std::string> TransportCatalogue::GetBusesByStop(const std::string_view& stop_name) const {
+        auto stop_it = stops_.find(std::string(stop_name));
         if (stop_it == stops_.end()) {
             throw std::out_of_range("Stop not found");
         }
@@ -89,20 +96,17 @@ namespace transport_catalogue {
         return &it->second;
     }
 
-    const Bus* TransportCatalogue::FindBus(const std::string& name) const {
-        auto it = buses_.find(name);
+    const Bus* TransportCatalogue::FindBus(const std::string_view& name) const {
+        auto it = buses_.find(std::string(name));
         if (it == buses_.end()) {
             return nullptr;
         }
         return &it->second;
     }
 
-    int TransportCatalogue::GetDistance(const std::string& from, const std::string& to) const {
+    int TransportCatalogue::GetDistance(const std::string_view& from, const std::string_view& to) const {
         const Stop* from_stop = FindStop(from);
         const Stop* to_stop = FindStop(to);
-        if (!from_stop || !to_stop) {
-            throw std::out_of_range("Distance not found");
-        }
 
         auto it = distances_.find({ from_stop, to_stop });
         if (it != distances_.end()) {
@@ -117,4 +121,7 @@ namespace transport_catalogue {
         throw std::out_of_range("Distance not found");
     }
 
+    size_t TransportCatalogue::PairHasher::operator()(const std::pair<const Stop*, const Stop*>& pair) const {
+        return std::hash<const void*>()(pair.first) ^ std::hash<const void*>()(pair.second);
+    }
 }
