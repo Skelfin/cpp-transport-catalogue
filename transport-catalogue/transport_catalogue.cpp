@@ -8,9 +8,9 @@ namespace transport_catalogue {
 
     void TransportCatalogue::AddStop(const Stop& stop) {
         stops_.emplace(stop.name, stop);
-        stop_names_.push_back(stop.name);
-        stop_strings_.push_back(stop.name);
+        stop_string_views_.push_back(stops_.at(stop.name).name);
     }
+
 
     void TransportCatalogue::AddBus(const Bus& bus) {
         auto& added_bus = buses_.emplace(bus.name, Bus{ bus.name, {}, bus.is_circular }).first->second;
