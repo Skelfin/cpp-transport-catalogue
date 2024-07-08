@@ -6,7 +6,7 @@
 
 namespace json_reader {
 
-    RenderSettings ParseRenderSettings(const json::Dict& dict) {
+    RenderSettings JsonReader::ParseRenderSettings(const json::Dict& dict) {
         RenderSettings settings;
         settings.width = dict.at("width").AsDouble();
         settings.height = dict.at("height").AsDouble();
@@ -72,22 +72,21 @@ namespace json_reader {
         return settings;
     }
 
-    void ProcessRequests(std::istream& input, std::ostream& output, transport_catalogue::TransportCatalogue& tc) {
+    void JsonReader::ProcessRequests(std::istream& input, std::ostream& output) {
         const auto document = json::Load(input);
         const auto& root = document.GetRoot().AsMap();
 
         const auto& base_requests = root.at("base_requests").AsArray();
         const auto& stat_requests = root.at("stat_requests").AsArray();
         const auto& render_settings_dict = root.at("render_settings").AsMap();
-        auto render_settings = ParseRenderSettings(render_settings_dict);
+        render_settings_ = ParseRenderSettings(render_settings_dict);
 
-        ProcessBaseRequests(base_requests, tc);
-        ProcessStatRequests(stat_requests, output, tc, render_settings);
+        ProcessBaseRequests(base_requests);
+        ProcessStatRequests(stat_requests, output);
     }
 
-    void ProcessBaseRequests(const json::Array& base_requests, transport_catalogue::TransportCatalogue& tc) {
+    void JsonReader::ProcessBaseRequests(const json::Array& base_requests) {
         std::unordered_set<std::string> stops_in_routes;
-
 
         for (const auto& request : base_requests) {
             const auto& request_map = request.AsMap();
@@ -98,7 +97,7 @@ namespace json_reader {
                 const double longitude = request_map.at("longitude").AsDouble();
 
                 domain::Stop stop{ name, {latitude, longitude} };
-                tc.AddStop(stop);
+                tc_.AddStop(stop);
             }
         }
 
@@ -116,7 +115,7 @@ namespace json_reader {
                 const bool is_roundtrip = request_map.at("is_roundtrip").AsBool();
 
                 domain::Bus bus{ name, stops, is_roundtrip };
-                tc.AddBus(bus);
+                tc_.AddBus(bus);
             }
         }
 
@@ -127,16 +126,16 @@ namespace json_reader {
                 const std::string& name = request_map.at("name").AsString();
                 const auto& road_distances = request_map.at("road_distances").AsMap();
                 for (const auto& [neighbor_name, distance_node] : road_distances) {
-                    tc.SetDistance(name, neighbor_name, distance_node.AsInt());
+                    tc_.SetDistance(name, neighbor_name, distance_node.AsInt());
                 }
             }
         }
-        tc.UpdateFilteredStops(stops_in_routes);
+        tc_.UpdateFilteredStops(stops_in_routes);
     }
 
-    void ProcessStatRequests(const json::Array& stat_requests, std::ostream& output, const transport_catalogue::TransportCatalogue& tc, const RenderSettings& render_settings) {
+    void JsonReader::ProcessStatRequests(const json::Array& stat_requests, std::ostream& output) {
         json::Array responses;
-        request_handler::RequestHandler handler(tc);
+        request_handler::RequestHandler handler(tc_);
 
         for (const auto& request : stat_requests) {
             const auto& request_map = request.AsMap();
@@ -156,7 +155,7 @@ namespace json_reader {
                     const auto& buses = *buses_opt;
                     json::Array buses_node;
                     for (const auto& bus : buses) {
-                        buses_node.emplace_back(bus);
+                        buses_node.emplace_back(bus.name);
                     }
                     response["buses"] = std::move(buses_node);
                 }
@@ -176,7 +175,7 @@ namespace json_reader {
             }
             else if (type == "Map") {
                 std::ostringstream map_stream;
-                map_renderer::RenderMap(tc, map_stream, render_settings);
+                map_renderer::RenderMap(tc_, map_stream, render_settings_);
                 const std::string map_svg = map_stream.str();
 
                 response["map"] = map_svg;

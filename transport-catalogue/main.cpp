@@ -4,10 +4,10 @@
 
 int main() {
     std::istream& input = std::cin;
-
     transport_catalogue::TransportCatalogue tc;
+    json_reader::JsonReader reader(tc);
 
-    json_reader::ProcessRequests(input, std::cout, tc);
+    reader.ProcessRequests(input, std::cout);
 
     return 0;
 }

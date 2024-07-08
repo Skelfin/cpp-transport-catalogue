@@ -42,7 +42,7 @@ namespace json {
             char c;
             while (input >> c) {
                 if (c == ']') {
-                    return Node(move(result));
+                    return Node(result);
                 }
                 else if (c == ',') {
                     continue;
@@ -80,7 +80,7 @@ namespace json {
             char c;
             while (input.get(c)) {
                 if (c == '"') {
-                    return Node(move(result));
+                    return Node(result);
                 }
                 if (c == '\\') {
                     if (!input.get(c)) {
@@ -107,7 +107,7 @@ namespace json {
             char c;
             while (input >> c) {
                 if (c == '}') {
-                    return Node(move(result));
+                    return Node(result);
                 }
                 else if (c == ',') {
                     continue;
@@ -270,7 +270,7 @@ namespace json {
         }
 
         void PrintNode(const Node& node, const PrintContext& ctx) {
-            std::visit([&ctx](const auto& value) { PrintValue(value, ctx); }, node.GetValue());
+            std::visit([&ctx](const auto& value) { PrintValue(value, ctx); }, node);
         }
 
     }  // namespace

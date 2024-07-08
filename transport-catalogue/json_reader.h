@@ -22,9 +22,19 @@ namespace json_reader {
         std::vector<svg::Color> color_palette;
     };
 
+    class JsonReader {
+    public:
+        JsonReader(transport_catalogue::TransportCatalogue& tc) : tc_(tc) {}
 
-    void ProcessRequests(std::istream& input, std::ostream& output, transport_catalogue::TransportCatalogue& tc);
-    void ProcessBaseRequests(const json::Array& base_requests, transport_catalogue::TransportCatalogue& tc);
-    void ProcessStatRequests(const json::Array& stat_requests, std::ostream& output, const transport_catalogue::TransportCatalogue& tc, const RenderSettings& render_settings);
+        void ProcessRequests(std::istream& input, std::ostream& output);
+
+    private:
+        RenderSettings ParseRenderSettings(const json::Dict& dict);
+        void ProcessBaseRequests(const json::Array& base_requests);
+        void ProcessStatRequests(const json::Array& stat_requests, std::ostream& output);
+
+        transport_catalogue::TransportCatalogue& tc_;
+        RenderSettings render_settings_;
+    };
 
 }  // namespace json_reader

@@ -19,18 +19,12 @@ namespace domain {
     };
 
     struct BusInfo {
-        BusInfo()
-            : name("")
-            , count_stops(0)
-            , unique_count_stops(0)
-            , len(0.0)
-            , curvature(0.0)
-        {}
         std::string name;
         size_t count_stops;
         size_t unique_count_stops;
         double len;
         double curvature;
+        BusInfo();
     };
 
 }  // namespace domain
