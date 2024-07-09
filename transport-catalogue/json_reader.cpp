@@ -72,9 +72,8 @@ namespace json_reader {
         return settings;
     }
 
-    void JsonReader::ProcessRequests(std::istream& input, std::ostream& output) {
-        const auto document = json::Load(input);
-        const auto& root = document.GetRoot().AsMap();
+    json::Node JsonReader::ProcessRequests(const json::Node& input) {
+        const auto& root = input.AsMap();
 
         const auto& base_requests = root.at("base_requests").AsArray();
         const auto& stat_requests = root.at("stat_requests").AsArray();
@@ -82,7 +81,7 @@ namespace json_reader {
         render_settings_ = ParseRenderSettings(render_settings_dict);
 
         ProcessBaseRequests(base_requests);
-        ProcessStatRequests(stat_requests, output);
+        return json::Node{ ProcessStatRequests(stat_requests) };
     }
 
     void JsonReader::ProcessBaseRequests(const json::Array& base_requests) {
@@ -133,7 +132,7 @@ namespace json_reader {
         tc_.UpdateFilteredStops(stops_in_routes);
     }
 
-    void JsonReader::ProcessStatRequests(const json::Array& stat_requests, std::ostream& output) {
+    json::Array JsonReader::ProcessStatRequests(const json::Array& stat_requests) {
         json::Array responses;
         request_handler::RequestHandler handler(tc_);
 
@@ -184,7 +183,7 @@ namespace json_reader {
             responses.emplace_back(std::move(response));
         }
 
-        json::Print(json::Document{ std::move(responses) }, output);
+        return responses;
     }
 
 }  // namespace json_reader

@@ -26,12 +26,12 @@ namespace json_reader {
     public:
         JsonReader(transport_catalogue::TransportCatalogue& tc) : tc_(tc) {}
 
-        void ProcessRequests(std::istream& input, std::ostream& output);
+        json::Node ProcessRequests(const json::Node& input);
 
     private:
         RenderSettings ParseRenderSettings(const json::Dict& dict);
         void ProcessBaseRequests(const json::Array& base_requests);
-        void ProcessStatRequests(const json::Array& stat_requests, std::ostream& output);
+        json::Array ProcessStatRequests(const json::Array& stat_requests);
 
         transport_catalogue::TransportCatalogue& tc_;
         RenderSettings render_settings_;

@@ -284,4 +284,9 @@ namespace json {
         PrintNode(doc.GetRoot(), ctx);
     }
 
+    bool Node::AsBool() const {
+        if (!IsBool()) throw std::logic_error("Not a bool");
+        return std::get<bool>(*this);
+    }
+
 }  // namespace json

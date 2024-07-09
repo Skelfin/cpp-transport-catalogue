@@ -34,10 +34,7 @@ namespace json {
             if (!IsInt()) throw std::logic_error("Not an int");
             return std::get<int>(*this);
         }
-        bool AsBool() const {
-            if (!IsBool()) throw std::logic_error("Not a bool");
-            return std::get<bool>(*this);
-        }
+        bool AsBool() const;
         double AsDouble() const {
             if (IsInt()) return static_cast<double>(std::get<int>(*this));
             if (IsPureDouble()) return std::get<double>(*this);
