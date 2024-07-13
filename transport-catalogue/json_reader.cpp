@@ -1,8 +1,10 @@
 #include "json_reader.h"
 #include "request_handler.h"
 #include "map_renderer.h"
+#include "json_builder.h" // Include the json_builder header
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 
 namespace json_reader {
 
@@ -73,11 +75,11 @@ namespace json_reader {
     }
 
     json::Node JsonReader::ProcessRequests(const json::Node& input) {
-        const auto& root = input.AsMap();
+        const auto& root = input.AsDict();
 
         const auto& base_requests = root.at("base_requests").AsArray();
         const auto& stat_requests = root.at("stat_requests").AsArray();
-        const auto& render_settings_dict = root.at("render_settings").AsMap();
+        const auto& render_settings_dict = root.at("render_settings").AsDict();
         render_settings_ = ParseRenderSettings(render_settings_dict);
 
         ProcessBaseRequests(base_requests);
@@ -88,7 +90,7 @@ namespace json_reader {
         std::unordered_set<std::string> stops_in_routes;
 
         for (const auto& request : base_requests) {
-            const auto& request_map = request.AsMap();
+            const auto& request_map = request.AsDict();
             const std::string& type = request_map.at("type").AsString();
             if (type == "Stop") {
                 const std::string& name = request_map.at("name").AsString();
@@ -101,7 +103,7 @@ namespace json_reader {
         }
 
         for (const auto& request : base_requests) {
-            const auto& request_map = request.AsMap();
+            const auto& request_map = request.AsDict();
             const std::string& type = request_map.at("type").AsString();
             if (type == "Bus") {
                 const std::string& name = request_map.at("name").AsString();
@@ -119,11 +121,11 @@ namespace json_reader {
         }
 
         for (const auto& request : base_requests) {
-            const auto& request_map = request.AsMap();
+            const auto& request_map = request.AsDict();
             const std::string& type = request_map.at("type").AsString();
             if (type == "Stop") {
                 const std::string& name = request_map.at("name").AsString();
-                const auto& road_distances = request_map.at("road_distances").AsMap();
+                const auto& road_distances = request_map.at("road_distances").AsDict();
                 for (const auto& [neighbor_name, distance_node] : road_distances) {
                     tc_.SetDistance(name, neighbor_name, distance_node.AsInt());
                 }
@@ -137,39 +139,40 @@ namespace json_reader {
         request_handler::RequestHandler handler(tc_);
 
         for (const auto& request : stat_requests) {
-            const auto& request_map = request.AsMap();
+            const auto& request_map = request.AsDict();
             const int request_id = request_map.at("id").AsInt();
             const std::string& type = request_map.at("type").AsString();
 
-            json::Dict response;
-            response["request_id"] = request_id;
+            json::Builder response_builder;
+            response_builder.StartDict()
+                .Key("request_id").Value(request_id);
 
             if (type == "Stop") {
                 const std::string& name = request_map.at("name").AsString();
                 auto buses_opt = handler.GetBusesByStop(name);
                 if (!buses_opt) {
-                    response["error_message"] = "not found";
+                    response_builder.Key("error_message").Value("not found");
                 }
                 else {
                     const auto& buses = *buses_opt;
                     json::Array buses_node;
                     for (const auto& bus : buses) {
-                        buses_node.emplace_back(bus.name);
+                        buses_node.push_back(bus.name);
                     }
-                    response["buses"] = std::move(buses_node);
+                    response_builder.Key("buses").Value(buses_node);
                 }
             }
             else if (type == "Bus") {
                 const std::string& name = request_map.at("name").AsString();
                 try {
                     domain::BusInfo bus_info = handler.GetBusInfo(name);
-                    response["curvature"] = bus_info.curvature;
-                    response["route_length"] = static_cast<int>(bus_info.len);
-                    response["stop_count"] = static_cast<int>(bus_info.count_stops);
-                    response["unique_stop_count"] = static_cast<int>(bus_info.unique_count_stops);
+                    response_builder.Key("curvature").Value(bus_info.curvature)
+                        .Key("route_length").Value(static_cast<int>(bus_info.len))
+                        .Key("stop_count").Value(static_cast<int>(bus_info.count_stops))
+                        .Key("unique_stop_count").Value(static_cast<int>(bus_info.unique_count_stops));
                 }
                 catch (const std::out_of_range&) {
-                    response["error_message"] = "not found";
+                    response_builder.Key("error_message").Value("not found");
                 }
             }
             else if (type == "Map") {
@@ -177,10 +180,10 @@ namespace json_reader {
                 map_renderer::RenderMap(tc_, map_stream, render_settings_);
                 const std::string map_svg = map_stream.str();
 
-                response["map"] = map_svg;
+                response_builder.Key("map").Value(map_svg);
             }
 
-            responses.emplace_back(std::move(response));
+            responses.push_back(response_builder.EndDict().Build());
         }
 
         return responses;
