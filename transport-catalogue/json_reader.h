@@ -3,7 +3,10 @@
 #include "json.h"
 #include "transport_catalogue.h"
 #include "svg.h"
+#include "transport_router.h"
+#include "router.h"
 #include <vector>
+#include <memory>
 
 namespace json_reader {
 
@@ -24,17 +27,21 @@ namespace json_reader {
 
     class JsonReader {
     public:
-        JsonReader(transport_catalogue::TransportCatalogue& tc) : tc_(tc) {}
+        JsonReader(transport_catalogue::TransportCatalogue& tc)
+            : tc_(tc), transport_router_(nullptr) {}
 
         json::Node ProcessRequests(const json::Node& input);
 
     private:
         RenderSettings ParseRenderSettings(const json::Dict& dict);
+        router::RoutingSettings ParseRoutingSettings(const json::Dict& dict);
         void ProcessBaseRequests(const json::Array& base_requests);
         json::Array ProcessStatRequests(const json::Array& stat_requests);
 
         transport_catalogue::TransportCatalogue& tc_;
         RenderSettings render_settings_;
+        router::RoutingSettings routing_settings_;
+        std::unique_ptr<router::TransportRouter> transport_router_;  // Store a single instance of TransportRouter
     };
 
 }  // namespace json_reader

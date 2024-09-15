@@ -1,7 +1,7 @@
 #include "json_reader.h"
 #include "request_handler.h"
 #include "map_renderer.h"
-#include "json_builder.h" // Include the json_builder header
+#include "json_builder.h"
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -74,16 +74,28 @@ namespace json_reader {
         return settings;
     }
 
+    router::RoutingSettings JsonReader::ParseRoutingSettings(const json::Dict& dict) {
+        router::RoutingSettings settings;
+        settings.bus_wait_time = std::chrono::minutes(dict.at("bus_wait_time").AsInt());
+        settings.bus_velocity = dict.at("bus_velocity").AsDouble();
+
+        return settings;
+    }
+
     json::Node JsonReader::ProcessRequests(const json::Node& input) {
         const auto& root = input.AsDict();
 
-        const auto& base_requests = root.at("base_requests").AsArray();
-        const auto& stat_requests = root.at("stat_requests").AsArray();
-        const auto& render_settings_dict = root.at("render_settings").AsDict();
-        render_settings_ = ParseRenderSettings(render_settings_dict);
+        ProcessBaseRequests(root.at("base_requests").AsArray());
+        render_settings_ = ParseRenderSettings(root.at("render_settings").AsDict());
+        routing_settings_ = ParseRoutingSettings(root.at("routing_settings").AsDict());
 
-        ProcessBaseRequests(base_requests);
-        return json::Node{ ProcessStatRequests(stat_requests) };
+        // Check if router is already built
+        if (!transport_router_) {
+            transport_router_ = std::make_unique<router::TransportRouter>(tc_, routing_settings_);
+            transport_router_->BuildRouter();
+        }
+
+        return json::Node{ ProcessStatRequests(root.at("stat_requests").AsArray()) };
     }
 
     void JsonReader::ProcessBaseRequests(const json::Array& base_requests) {
@@ -144,8 +156,7 @@ namespace json_reader {
             const std::string& type = request_map.at("type").AsString();
 
             json::Builder response_builder;
-            response_builder.StartDict()
-                .Key("request_id").Value(request_id);
+            response_builder.StartDict().Key("request_id").Value(request_id);
 
             if (type == "Stop") {
                 const std::string& name = request_map.at("name").AsString();
@@ -179,8 +190,68 @@ namespace json_reader {
                 std::ostringstream map_stream;
                 map_renderer::RenderMap(tc_, map_stream, render_settings_);
                 const std::string map_svg = map_stream.str();
-
                 response_builder.Key("map").Value(map_svg);
+            }
+            else if (type == "Route") {
+                const std::string& from = request_map.at("from").AsString();
+                const std::string& to = request_map.at("to").AsString();
+
+                const auto from_stop = tc_.FindStop(from);
+                const auto to_stop = tc_.FindStop(to);
+
+                if (!from_stop || !to_stop) {
+                    response_builder.Key("error_message").Value(std::string("not found"));
+                }
+                else {
+                    auto from_id = transport_router_->GetStopVertexId(from);
+                    auto to_id = transport_router_->GetStopVertexId(to);
+
+                    if (!from_id || !to_id) {
+                        response_builder.Key("error_message").Value(std::string("not found"));
+                    }
+                    else {
+                        auto route_info = transport_router_->GetRouter().BuildRoute(*from_id, *to_id);
+                        if (route_info) {
+                            response_builder.Key("total_time").Value(route_info->weight);
+                            json::Array items;
+                            for (const auto edge_id : route_info->edges) {
+                                const auto& edge_info = transport_router_->GetEdgeInfo(edge_id);
+                                const auto& edge = transport_router_->GetGraph().GetEdge(edge_id);
+
+                                if (edge_info.bus_name.empty()) {
+                                    // This is a "Wait" edge
+                                    std::string stop_name = std::string(transport_router_->GetStopNameByVertexId(edge.from));
+                                    items.push_back(
+                                        json::Builder{}
+                                        .StartDict()
+                                        .Key("type").Value(std::string("Wait"))
+                                        .Key("stop_name").Value(stop_name)
+                                        .Key("time").Value(edge.weight)
+                                        .EndDict()
+                                        .Build()
+                                    );
+                                }
+                                else {
+                                    // This is a "Bus" edge
+                                    items.push_back(
+                                        json::Builder{}
+                                        .StartDict()
+                                        .Key("type").Value(std::string("Bus"))
+                                        .Key("bus").Value(edge_info.bus_name)
+                                        .Key("span_count").Value(static_cast<int>(edge_info.span_count))
+                                        .Key("time").Value(edge.weight)
+                                        .EndDict()
+                                        .Build()
+                                    );
+                                }
+                            }
+                            response_builder.Key("items").Value(items);
+                        }
+                        else {
+                            response_builder.Key("error_message").Value(std::string("not found"));
+                        }
+                    }
+                }
             }
 
             responses.push_back(response_builder.EndDict().Build());
