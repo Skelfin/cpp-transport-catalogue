@@ -2,10 +2,15 @@
 
 #include "graph.h"
 #include "transport_catalogue.h"
-#include <memory>
-#include <chrono>
 #include "router.h"
+
+#include <chrono>
+#include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace router {
 
@@ -19,19 +24,40 @@ namespace router {
         size_t span_count;
     };
 
+    struct RouteItem {
+        enum class Type {
+            Wait,
+            Bus
+        };
+
+        Type type;
+        std::string stop_name;
+        std::string bus_name;
+        double time;
+        size_t span_count;
+    };
+
+    struct RouteInfo {
+        double total_time;
+        std::vector<RouteItem> items;
+    };
+
     class TransportRouter {
     public:
         TransportRouter(const transport_catalogue::TransportCatalogue& tc, const RoutingSettings& settings);
 
-        void BuildRouter();
+        std::optional<RouteInfo> FindOptimalRoute(const std::string& from, const std::string& to) const;
 
-        const graph::Router<double>& GetRouter() const;
-        const graph::DirectedWeightedGraph<double>& GetGraph() const;
+    private:
+        void BuildRouter();
+        void InitializeVertexIds();
+        void AddWaitEdges();
+        void AddBusEdges();
+
         std::optional<graph::VertexId> GetStopVertexId(const std::string_view& stop_name) const;
         const EdgeInfo& GetEdgeInfo(graph::EdgeId edge_id) const;
         std::string_view GetStopNameByVertexId(graph::VertexId vertex_id) const;
 
-    private:
         const transport_catalogue::TransportCatalogue& tc_;
         RoutingSettings settings_;
         std::unique_ptr<graph::DirectedWeightedGraph<double>> graph_;

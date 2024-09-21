@@ -41,7 +41,7 @@ namespace json_reader {
         transport_catalogue::TransportCatalogue& tc_;
         RenderSettings render_settings_;
         router::RoutingSettings routing_settings_;
-        std::unique_ptr<router::TransportRouter> transport_router_;  // Store a single instance of TransportRouter
+        std::unique_ptr<router::TransportRouter> transport_router_;
     };
 
 }  // namespace json_reader

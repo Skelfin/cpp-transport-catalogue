@@ -89,10 +89,8 @@ namespace json_reader {
         render_settings_ = ParseRenderSettings(root.at("render_settings").AsDict());
         routing_settings_ = ParseRoutingSettings(root.at("routing_settings").AsDict());
 
-        // Check if router is already built
         if (!transport_router_) {
             transport_router_ = std::make_unique<router::TransportRouter>(tc_, routing_settings_);
-            transport_router_->BuildRouter();
         }
 
         return json::Node{ ProcessStatRequests(root.at("stat_requests").AsArray()) };
@@ -203,53 +201,39 @@ namespace json_reader {
                     response_builder.Key("error_message").Value(std::string("not found"));
                 }
                 else {
-                    auto from_id = transport_router_->GetStopVertexId(from);
-                    auto to_id = transport_router_->GetStopVertexId(to);
-
-                    if (!from_id || !to_id) {
-                        response_builder.Key("error_message").Value(std::string("not found"));
+                    auto route_info = transport_router_->FindOptimalRoute(from, to);
+                    if (route_info) {
+                        response_builder.Key("total_time").Value(route_info->total_time);
+                        json::Array items;
+                        for (const auto& item : route_info->items) {
+                            if (item.type == router::RouteItem::Type::Wait) {
+                                items.push_back(
+                                    json::Builder{}
+                                    .StartDict()
+                                    .Key("type").Value(std::string("Wait"))
+                                    .Key("stop_name").Value(item.stop_name)
+                                    .Key("time").Value(item.time)
+                                    .EndDict()
+                                    .Build()
+                                );
+                            }
+                            else if (item.type == router::RouteItem::Type::Bus) {
+                                items.push_back(
+                                    json::Builder{}
+                                    .StartDict()
+                                    .Key("type").Value(std::string("Bus"))
+                                    .Key("bus").Value(item.bus_name)
+                                    .Key("span_count").Value(static_cast<int>(item.span_count))
+                                    .Key("time").Value(item.time)
+                                    .EndDict()
+                                    .Build()
+                                );
+                            }
+                        }
+                        response_builder.Key("items").Value(items);
                     }
                     else {
-                        auto route_info = transport_router_->GetRouter().BuildRoute(*from_id, *to_id);
-                        if (route_info) {
-                            response_builder.Key("total_time").Value(route_info->weight);
-                            json::Array items;
-                            for (const auto edge_id : route_info->edges) {
-                                const auto& edge_info = transport_router_->GetEdgeInfo(edge_id);
-                                const auto& edge = transport_router_->GetGraph().GetEdge(edge_id);
-
-                                if (edge_info.bus_name.empty()) {
-                                    // This is a "Wait" edge
-                                    std::string stop_name = std::string(transport_router_->GetStopNameByVertexId(edge.from));
-                                    items.push_back(
-                                        json::Builder{}
-                                        .StartDict()
-                                        .Key("type").Value(std::string("Wait"))
-                                        .Key("stop_name").Value(stop_name)
-                                        .Key("time").Value(edge.weight)
-                                        .EndDict()
-                                        .Build()
-                                    );
-                                }
-                                else {
-                                    // This is a "Bus" edge
-                                    items.push_back(
-                                        json::Builder{}
-                                        .StartDict()
-                                        .Key("type").Value(std::string("Bus"))
-                                        .Key("bus").Value(edge_info.bus_name)
-                                        .Key("span_count").Value(static_cast<int>(edge_info.span_count))
-                                        .Key("time").Value(edge.weight)
-                                        .EndDict()
-                                        .Build()
-                                    );
-                                }
-                            }
-                            response_builder.Key("items").Value(items);
-                        }
-                        else {
-                            response_builder.Key("error_message").Value(std::string("not found"));
-                        }
+                        response_builder.Key("error_message").Value(std::string("not found"));
                     }
                 }
             }
